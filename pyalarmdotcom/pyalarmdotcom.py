@@ -78,7 +78,6 @@ class Alarmdotcom(object):
         This uses the PhantomJS library with selenium. We will attempt to keep the
         connection alive but if we need to reconnect we will.
         """
-        self._driver = webdriver.PhantomJS()
         self.username = username
         self.password = password
         if not self._login():
@@ -89,6 +88,7 @@ class Alarmdotcom(object):
         Login to alarm.com
         """
         # Attempt to login to alarm.com
+        self._driver = webdriver.PhantomJS()
         self._driver.get(self.LOGIN_URL)
   
         # Check the login title to make sure it is the right one.
@@ -137,16 +137,20 @@ class Alarmdotcom(object):
         Check the current status of the alarm system.
         """
         # Click the refresh button to verify the state if it was made somewhere else
-        self._driver.find_element(by='id', value='ctl00_phBody_ArmingStateWidget_btnArmingRefresh').click()
+        try:
+            self._driver.find_element(by='id', value='ctl00_phBody_ArmingStateWidget_btnArmingRefresh').click()
 
-        # Wait a second for the widget to refresh
-        sleep(1)
+            # Wait a second for the widget to refresh
+            sleep(1)
 
-        # Recheck the current status
-        current_status = self._driver.find_element(by=self.STATUS_IMG[0],
+            # Recheck the current status
+            current_status = self._driver.find_element(by=self.STATUS_IMG[0],
                                                    value=self.STATUS_IMG[1]).get_attribute('alt')
 
-        return current_status
+            return current_status
+        except (exceptions.NoSuchElementException, exceptions.NoSuchWindowException) as e:
+            self._login()
+            return self.state
 
     def disarm(self):
         """
