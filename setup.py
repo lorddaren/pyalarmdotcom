@@ -11,4 +11,4 @@ setup(name='pyalarmdotcom',
       install_requires=[
         "selenium",
 	  ],
-      zip_safe=False)
+      zip_safe=True)
