@@ -68,7 +68,7 @@ class Alarmdotcom(object):
     # Image to check if hidden or not while the system performs it's action.
     STATUS_UPDATING = {'id': 'ctl00_phBody_ArmingStateWidget_imgArmingUpdating'}
     
-    def __init__(self, username, password):
+    def __init__(self, username, password, timeout=5):
         """
         Open a selenium connection.
  
@@ -77,8 +77,10 @@ class Alarmdotcom(object):
         """
         self.username = username
         self.password = password
+        self.timeout = timeout
         if not self._login():
             raise LoginException('Unable to login to alarm.com')
+
 
     def _login(self):
         """
@@ -115,13 +117,13 @@ class Alarmdotcom(object):
         """
 
         _LOGGER.debug('Attemting to change state of alarm.')
-        button = WebDriverWait(self._driver, 3).until(EC.visibility_of_element_located((btn[0], btn[1])))
+        button = WebDriverWait(self._driver, self.timeout).until(EC.visibility_of_element_located((btn[0], btn[1])))
         button.click()
 
         # If the particular command needs to have a second option clicked.
         if len(btn) > 2:
             _LOGGER.debug('Secondary option is available with this command. Attempt to locate and click.')
-            opt_button = WebDriverWait(self._driver, 3).until(EC.visibility_of_element_located((btn[0], btn[2])))
+            opt_button = WebDriverWait(self._driver, self.timeout).until(EC.visibility_of_element_located((btn[0], btn[2])))
             opt_button.click()
             # Loop until the system updates the status
             try:
@@ -138,10 +140,10 @@ class Alarmdotcom(object):
         """
         # Click the refresh button to verify the state if it was made somewhere else
         try:
-            button = WebDriverWait(self._driver, 3).until(EC.visibility_of_element_located(('id', 'ctl00_phBody_ArmingStateWidget_btnArmingRefresh')))
+            button = WebDriverWait(self._driver, self.timout).until(EC.visibility_of_element_located(('id', 'ctl00_phBody_ArmingStateWidget_btnArmingRefresh')))
             button.click()
             # Recheck the current status
-            current_status = WebDriverWait(self._driver, 3).until(EC.presence_of_element_located((self.STATUS_IMG[0],
+            current_status = WebDriverWait(self._driver, self.timeout).until(EC.presence_of_element_located((self.STATUS_IMG[0],
                                                    self.STATUS_IMG[1]))).get_attribute('alt')
             _LOGGER.debug('Fetched current status from system: {}'.format(current_status))
             return current_status
