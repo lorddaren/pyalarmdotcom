@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='pyalarmdotcom',
-      version='0.0.2',
+      version='0.0.3',
       description='Library to interface with alarm.com accounts',
       url='http://github.com/Xorso/pyalarmdotcom',
       author='Daren Lord',
