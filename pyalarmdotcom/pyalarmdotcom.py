@@ -6,6 +6,9 @@ Requires phantomjs 2.0
 
 from selenium import webdriver
 from selenium.common import exceptions
+from selenium import webdriver
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from time import sleep
 
 import signal
@@ -66,7 +69,7 @@ class Alarmdotcom(object):
     
     BTN_DISARM = ('id', 'ctl00_phBody_ArmingStateWidget_btnDisarm')
     BTN_ARM_STAY = ('id', 'ctl00_phBody_ArmingStateWidget_btnArmStay', 'ctl00_phBody_ArmingStateWidget_btnArmOptionStay')
-    BTN_ARM_AWAY = ('id', 'ctl00_phBody_ArmingStateWidget_btnArmAway', 'ctl00_phBody_ArmingStateWidget_btnArmOptionStay')
+    BTN_ARM_AWAY = ('id', 'ctl00_phBody_ArmingStateWidget_btnArmAway', 'ctl00_phBody_ArmingStateWidget_btnArmOptionAway')
 
     # Image to check if hidden or not while the system performs it's action.
     STATUS_UPDATING = {'id': 'ctl00_phBody_ArmingStateWidget_imgArmingUpdating'}
@@ -113,20 +116,19 @@ class Alarmdotcom(object):
         """
         Wait for the status to complete it's update.
         """
-        button = self._driver.find_element(by=btn[0], value=btn[1])
+
+        button = WebDriverWait(self._driver, 1).until(EC.visibility_of_element_located((btn[0], btn[1])))
         button.click()
-        sleep(1)
 
         if len(btn) > 2:
-            button_option = self._driver.find_element(by=btn[0], value=btn[2])
-            button_option.click()
-
+            opt_button = WebDriverWait(self._driver, 1).until(EC.visibility_of_element_located((btn[0], btn[2])))
+            opt_button.click()
             # Loop until the system updates the status
             try:
                 with time_limit(timeout):
                     try:
                         self._driver.find_element(by='id', value='ctl00_phBody_ArmingStateWidget_imgPopupSpinner')
-                    except exceptions.NoSuchElementException:
+                    except (exceptions.NoSuchElementException, exceptions.ElementNotVisibleException):
                         pass
             except TimeoutException:
                 pass
