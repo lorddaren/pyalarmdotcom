@@ -9,22 +9,9 @@ from selenium.common import exceptions
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from time import sleep
+import logging
 
-import signal
-from contextlib import contextmanager
-class TimeoutException(Exception): pass
-@contextmanager
-def time_limit(seconds):
-    def signal_handler(signum, frame):
-        raise TimeoutException("Timed out!")
-    signal.signal(signal.SIGALRM, signal_handler)
-    signal.alarm(seconds)
-    try:
-        yield
-    finally:
-        signal.alarm(0)
-
+_LOGGER = logging.getLogger(__name__)
 
 class LoginException(Exception):
     """ 
@@ -45,6 +32,13 @@ class SystemDisarmedError(Exception):
     """
     Raise when the system is already disamred and an attempt
     to disarm the system is made.
+    """
+    pass
+
+
+class ElementException(Exception):
+    """
+    Raise when we are unable to locate an element on the page.
     """
     pass
 
@@ -96,20 +90,23 @@ class Alarmdotcom(object):
   
         # Check the login title to make sure it is the right one.
         if self._driver.title == 'Customer Login':
-
             user = self._driver.find_element(by=self.LOGIN_USERNAME[0], value=self.LOGIN_USERNAME[1])
             pwd = self._driver.find_element(by=self.LOGIN_PASSWORD[0], value=self.LOGIN_PASSWORD[1])
             btn = self._driver.find_element(by=self.LOGIN_BUTTON[0], value=self.LOGIN_BUTTON[1])
 
+            _LOGGER.debug('Sending login credentials to alarm.com')
             user.send_keys(self.username)
             pwd.send_keys(self.password)
             btn.click() 
            
             if self._driver.title == 'Current System Status':
+                _LOGGER.info('Successful login to alarm.com')
                 return True
             else:
+                _LOGGER.error('Unable to login to alarm.com')
                 return False
         else:
+            _LOGGER.error('Unable to locate alarm.com Customer login page.')
             return False
 
     def _set_state(self, btn, timeout=10):
@@ -117,21 +114,22 @@ class Alarmdotcom(object):
         Wait for the status to complete it's update.
         """
 
+        _LOGGER.debug('Attemting to change state of alarm.')
         button = WebDriverWait(self._driver, 1).until(EC.visibility_of_element_located((btn[0], btn[1])))
         button.click()
 
+        # If the particular command needs to have a second option clicked.
         if len(btn) > 2:
+            _LOGGER.debug('Secondary option is available with this command. Attempt to locate and click.')
             opt_button = WebDriverWait(self._driver, 1).until(EC.visibility_of_element_located((btn[0], btn[2])))
             opt_button.click()
             # Loop until the system updates the status
             try:
-                with time_limit(timeout):
-                    try:
-                        self._driver.find_element(by='id', value='ctl00_phBody_ArmingStateWidget_imgPopupSpinner')
-                    except (exceptions.NoSuchElementException, exceptions.ElementNotVisibleException):
-                        pass
-            except TimeoutException:
-                pass
+                _LOGGER.info('Waiting for system to change status.')
+                WebDriverWait(self._driver,
+                              timeout).until(EC.invisibility_of_element_located(('id','ctl00_phBody_ArmingStateWidget_imgPopupSpinner')))
+            except exceptions.TimeoutException:
+                raise ElementException('Timeout while trying to locate the secondary option.')
 
     @property
     def state(self):
@@ -140,17 +138,15 @@ class Alarmdotcom(object):
         """
         # Click the refresh button to verify the state if it was made somewhere else
         try:
-            self._driver.find_element(by='id', value='ctl00_phBody_ArmingStateWidget_btnArmingRefresh').click()
-
-            # Wait a second for the widget to refresh
-            sleep(1)
-
+            button = WebDriverWait(self._driver, 2).until(EC.visibility_of_element_located(('id', 'ctl00_phBody_ArmingStateWidget_btnArmingRefresh')))
+            button.click()
             # Recheck the current status
-            current_status = self._driver.find_element(by=self.STATUS_IMG[0],
-                                                   value=self.STATUS_IMG[1]).get_attribute('alt')
-
+            current_status = WebDriverWait(self._driver, 1).until(EC.presence_of_element_located((self.STATUS_IMG[0],
+                                                   self.STATUS_IMG[1]))).get_attribute('alt')
+            _LOGGER.debug('Fetched current status from system: {}'.format(current_status))
             return current_status
-        except (exceptions.NoSuchElementException, exceptions.NoSuchWindowException) as e:
+        except (exceptions.NoSuchElementException, exceptions.NoSuchWindowException, exceptions.TimeoutException) as e:
+            _LOGGER.warning('Error while checking alarm status. Attempting login again.')
             self._login()
             return self.state
 
@@ -159,6 +155,7 @@ class Alarmdotcom(object):
         Disarm the alarm system
         """
         if self.state != 'Disarmed':
+            _LOGGER.info('Disarming system.')
             self._set_state(self.BTN_DISARM)
         else:
             raise SystemDisarmedError('The system is already disarmed!')
@@ -168,6 +165,7 @@ class Alarmdotcom(object):
         Arm the system in away mode.
         """
         if self.state == 'Disarmed':
+            _LOGGER.info('Arming system in away mode.')
             self._set_state(self.BTN_ARM_AWAY)
         else:
             raise SystemArmedError('The system is already armed!')
@@ -177,6 +175,7 @@ class Alarmdotcom(object):
         Arm the system in stay mode.
         """
         if self.state == 'Disarmed':
+            _LOGGER.info('Arming system in stay mode.s')
             self._set_state(self.BTN_ARM_STAY)
         else:
             raise SystemArmedError('The system is already armed!')
