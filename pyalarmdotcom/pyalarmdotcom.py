@@ -140,7 +140,7 @@ class Alarmdotcom(object):
         """
         # Click the refresh button to verify the state if it was made somewhere else
         try:
-            button = WebDriverWait(self._driver, self.timout).until(EC.visibility_of_element_located(('id', 'ctl00_phBody_ArmingStateWidget_btnArmingRefresh')))
+            button = WebDriverWait(self._driver, self.timeout).until(EC.visibility_of_element_located(('id', 'ctl00_phBody_ArmingStateWidget_btnArmingRefresh')))
             button.click()
             # Recheck the current status
             current_status = WebDriverWait(self._driver, self.timeout).until(EC.presence_of_element_located((self.STATUS_IMG[0],
