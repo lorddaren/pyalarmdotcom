@@ -10,6 +10,7 @@ from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import logging
+import urllib.error
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -147,7 +148,7 @@ class Alarmdotcom(object):
                                                    self.STATUS_IMG[1]))).get_attribute('alt')
             _LOGGER.debug('Fetched current status from system: {}'.format(current_status))
             return current_status
-        except (exceptions.NoSuchElementException, exceptions.NoSuchWindowException, exceptions.TimeoutException) as e:
+        except (exceptions.NoSuchElementException, exceptions.NoSuchWindowException, exceptions.TimeoutException, urllib.error.URLError) as e:
             _LOGGER.warning('Error while checking alarm status. Attempting login again.')
             self._login()
             return self.state
