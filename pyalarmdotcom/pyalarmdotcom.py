@@ -55,16 +55,16 @@ class Alarmdotcom(object):
 
     # Page elements on alarm.com that are needed
     # Using a dict for the attributes to set whether it is a name or id for locating the field
-    LOGIN_URL = 'https://www.alarm.com/login?m=no_session&ReturnUrl=/web/Security/SystemSummary.aspx'
-    LOGIN_USERNAME = ('name', 'ctl00$ContentPlaceHolder1$loginform$txtUserName')
-    LOGIN_PASSWORD = ('name', 'txtPassword')
-    LOGIN_BUTTON = ('name', 'ctl00$ContentPlaceHolder1$loginform$signInButton')
+    LOGIN_URL = 'https://www.alarm.com/pda/Default.aspx'
+    LOGIN_USERNAME = ('name', 'ctl00$ContentPlaceHolder1$txtLogin')
+    LOGIN_PASSWORD = ('name', 'ctl00$ContentPlaceHolder1$txtPassword')
+    LOGIN_BUTTON = ('name', 'ctl00$ContentPlaceHolder1$btnLogin')
 
-    STATUS_IMG = ('id', 'ctl00_phBody_ArmingStateWidget_imgState')
+    STATUS_IMG = ('id', 'ctl00_phBody_lblArmingState')
     
-    BTN_DISARM = ('id', 'ctl00_phBody_ArmingStateWidget_btnDisarm')
-    BTN_ARM_STAY = ('id', 'ctl00_phBody_ArmingStateWidget_btnArmStay', 'ctl00_phBody_ArmingStateWidget_btnArmOptionStay')
-    BTN_ARM_AWAY = ('id', 'ctl00_phBody_ArmingStateWidget_btnArmAway', 'ctl00_phBody_ArmingStateWidget_btnArmOptionAway')
+    BTN_DISARM = ('id', 'ctl00_phBody_butDisarm')
+    BTN_ARM_STAY = ('id', 'ctl00_phBody_butArmStay', 'ctl00_phBody_ArmingStateWidget_btnArmOptionStay')
+    BTN_ARM_AWAY = ('id', 'ctl00_phBody_butArmAway', 'ctl00_phBody_ArmingStateWidget_btnArmOptionAway')
 
     # Image to check if hidden or not while the system performs it's action.
     STATUS_UPDATING = {'id': 'ctl00_phBody_ArmingStateWidget_imgArmingUpdating'}
@@ -88,11 +88,14 @@ class Alarmdotcom(object):
         Login to alarm.com
         """
         # Attempt to login to alarm.com
+        if hasattr(self, '_driver'):
+            self._driver.quit() 
         self._driver = webdriver.PhantomJS()
         self._driver.get(self.LOGIN_URL)
   
         # Check the login title to make sure it is the right one.
-        if self._driver.title == 'Customer Login':
+        _LOGGER.debug(self._driver.title)
+        if self._driver.title == '':
             user = self._driver.find_element(by=self.LOGIN_USERNAME[0], value=self.LOGIN_USERNAME[1])
             pwd = self._driver.find_element(by=self.LOGIN_PASSWORD[0], value=self.LOGIN_PASSWORD[1])
             btn = self._driver.find_element(by=self.LOGIN_BUTTON[0], value=self.LOGIN_BUTTON[1])
@@ -102,7 +105,8 @@ class Alarmdotcom(object):
             pwd.send_keys(self.password)
             btn.click() 
            
-            if self._driver.title == 'Current System Status':
+            _LOGGER.debug(self._driver.title)
+            if self._driver.title.strip() == 'System Summary':
                 _LOGGER.info('Successful login to alarm.com')
                 return True
             else:
@@ -122,17 +126,17 @@ class Alarmdotcom(object):
         button.click()
 
         # If the particular command needs to have a second option clicked.
-        if len(btn) > 2:
-            _LOGGER.debug('Secondary option is available with this command. Attempt to locate and click.')
-            opt_button = WebDriverWait(self._driver, self.timeout).until(EC.visibility_of_element_located((btn[0], btn[2])))
-            opt_button.click()
-            # Loop until the system updates the status
-            try:
-                _LOGGER.info('Waiting for system to change status.')
-                WebDriverWait(self._driver,
-                              timeout).until(EC.invisibility_of_element_located(('id','ctl00_phBody_ArmingStateWidget_imgPopupSpinner')))
-            except exceptions.TimeoutException:
-                raise ElementException('Timeout while trying to locate the secondary option.')
+        #if len(btn) > 2:
+            #_LOGGER.debug('Secondary option is available with this command. Attempt to locate and click.')
+            #opt_button = WebDriverWait(self._driver, self.timeout).until(EC.visibility_of_element_located((btn[0], btn[2])))
+            #opt_button.click()
+            ## Loop until the system updates the status
+            #try:
+                #_LOGGER.info('Waiting for system to change status.')
+                #WebDriverWait(self._driver,
+                              #timeout).until(EC.invisibility_of_element_located(('id','ctl00_phBody_ArmingStateWidget_imgPopupSpinner')))
+            #except exceptions.TimeoutException:
+                #raise ElementException('Timeout while trying to locate the secondary option.')
 
     @property
     def state(self):
@@ -141,11 +145,11 @@ class Alarmdotcom(object):
         """
         # Click the refresh button to verify the state if it was made somewhere else
         try:
-            button = WebDriverWait(self._driver, self.timeout).until(EC.visibility_of_element_located(('id', 'ctl00_phBody_ArmingStateWidget_btnArmingRefresh')))
-            button.click()
+            #button = WebDriverWait(self._driver, self.timeout).until(EC.visibility_of_element_located(('id', )))
+            #button.click()
             # Recheck the current status
             current_status = WebDriverWait(self._driver, self.timeout).until(EC.presence_of_element_located((self.STATUS_IMG[0],
-                                                   self.STATUS_IMG[1]))).get_attribute('alt')
+                                                   self.STATUS_IMG[1]))).text
             _LOGGER.debug('Fetched current status from system: {}'.format(current_status))
             return current_status
         except (exceptions.NoSuchElementException, exceptions.NoSuchWindowException, exceptions.TimeoutException, urllib.error.URLError) as e:
