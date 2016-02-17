@@ -124,6 +124,7 @@ class Alarmdotcom(object):
         _LOGGER.debug('Attemting to change state of alarm.')
         button = WebDriverWait(self._driver, self.timeout).until(EC.visibility_of_element_located((btn[0], btn[1])))
         button.click()
+        self._driver.refresh()
 
         # If the particular command needs to have a second option clicked.
         #if len(btn) > 2:
@@ -148,6 +149,7 @@ class Alarmdotcom(object):
             #button = WebDriverWait(self._driver, self.timeout).until(EC.visibility_of_element_located(('id', )))
             #button.click()
             # Recheck the current status
+            self._driver.refresh()
             current_status = WebDriverWait(self._driver, self.timeout).until(EC.presence_of_element_located((self.STATUS_IMG[0],
                                                    self.STATUS_IMG[1]))).text
             _LOGGER.debug('Fetched current status from system: {}'.format(current_status))
@@ -164,6 +166,7 @@ class Alarmdotcom(object):
         if self.state != 'Disarmed':
             _LOGGER.info('Disarming system.')
             self._set_state(self.BTN_DISARM)
+            self.state = 'Disarmed'
         else:
             raise SystemDisarmedError('The system is already disarmed!')
 
@@ -174,6 +177,7 @@ class Alarmdotcom(object):
         if self.state == 'Disarmed':
             _LOGGER.info('Arming system in away mode.')
             self._set_state(self.BTN_ARM_AWAY)
+            self.state = 'Armed Away'
         else:
             raise SystemArmedError('The system is already armed!')
 
@@ -184,5 +188,6 @@ class Alarmdotcom(object):
         if self.state == 'Disarmed':
             _LOGGER.info('Arming system in stay mode.s')
             self._set_state(self.BTN_ARM_STAY)
+            self.state = 'Armed Stay'
         else:
             raise SystemArmedError('The system is already armed!')
