@@ -124,7 +124,7 @@ class Alarmdotcom(object):
         _LOGGER.debug('Attemting to change state of alarm.')
         button = WebDriverWait(self._driver, self.timeout).until(EC.visibility_of_element_located((btn[0], btn[1])))
         button.click()
-        self._driver.get(self._driver.getCurrentUrl())
+        self._driver.get(self._driver.current_url)
 
     @property
     def state(self):
@@ -134,7 +134,7 @@ class Alarmdotcom(object):
         # Click the refresh button to verify the state if it was made somewhere else
         try:
             # Recheck the current status
-            self._driver.get(self._driver.getCurrentUrl())
+            self._driver.get(self._driver.current_url)
             current_status = WebDriverWait(self._driver, self.timeout).until(EC.presence_of_element_located((self.STATUS_IMG[0],
                                                    self.STATUS_IMG[1]))).text
             _LOGGER.debug('Fetched current status from system: {}'.format(current_status))
