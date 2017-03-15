@@ -1,0 +1,1 @@
+from .pyalarmdotcom import Alarmdotcom
