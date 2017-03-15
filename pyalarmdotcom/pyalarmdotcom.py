@@ -72,6 +72,13 @@ class Alarmdotcom(object):
     
     ARMING_PANEL = '#ctl00_phBody_pnlArming'
     ALARM_STATE = '#ctl00_phBody_lblArmingState'
+
+    COMMAND_LIST = {'Disarm': {'command': DISARM_COMMAND,
+                           'eventvalidation': DISARM_EVENT_VALIDATION},
+                'Arm+Stay': {'command': ARM_STAY_COMMAND,
+                             'eventvalidation': ARM_STAY_EVENT_VALIDATION},
+                'Arm+Away': {'command': ARM_AWAY_COMMAND,
+                             'eventvalidation': ARM_AWAY_EVENT_VALIDATION}}
     
     def __init__(self, username, password, websession, hass):
         """
