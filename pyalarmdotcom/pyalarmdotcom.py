@@ -94,11 +94,10 @@ class Alarmdotcom(object):
         self._websession = websession
         self._hass = hass
         self._login_info = None
-        slef._state = None
-        
+        self._state = None
 
     @asyncio.coroutine
-    def async_login(username, password, session):
+    def async_login(self):
        """Login to Alarm.com."""
         _LOGGER.debug('Attempting to log into Alarm.com...')
 
@@ -241,7 +240,7 @@ class Alarmdotcom(object):
                         yield from self.async_update()
                 except IndexError:
                     # May have been logged out
-                    self.async_login()
+                    yield from self.async_login()
                     if event == 'Disarm':
                         yield from self.async_alarm_disarm()
                     elif event == 'Arm+Stay':
