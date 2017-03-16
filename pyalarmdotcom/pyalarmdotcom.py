@@ -81,19 +81,19 @@ class Alarmdotcom(object):
                 'Arm+Away': {'command': ARM_AWAY_COMMAND,
                              'eventvalidation': ARM_AWAY_EVENT_VALIDATION}}
     
-    def __init__(self, username, password, websession, hass):
+    def __init__(self, username, password, websession, loop):
         """
         Use aiohttp to make a request to alarm.com
 
         :param username: Alarm.com username
         :param password: Alarm.com password
-        :param websession: Websession from HASS
-        :param hass: Homeassitant core
+        :param websession: AIOHttp Websession
+        :param loop: Async loop.
         """
         self._username = username
         self._password = password
         self._websession = websession
-        self._hass = hass
+        self._loop = loop
         self._login_info = None
         self._state = None
 
@@ -105,7 +105,7 @@ class Alarmdotcom(object):
        # Get the session key for future logins.
        response = None
        try:
-           with async_timeout.timeout(10, loop=self._hass.loop):
+           with async_timeout.timeout(10, loop=self._loop):
                response = yield from self._websession.get(
                    self.ALARMDOTCOM_URL + '/Default.aspx')
 
@@ -147,7 +147,7 @@ class Alarmdotcom(object):
 
        try:
            # Make an attempt to log in.
-           with async_timeout.timeout(10, loop=self._hass.loop):
+           with async_timeout.timeout(10, loop=self._loop):
                response = yield from self._websession.post(
                    self.ALARMDOTCOM_URL + '{}/Default.aspx'.format(
                        self._login_info['sessionkey']),
@@ -186,7 +186,7 @@ class Alarmdotcom(object):
         if not self._login_info:
             yield from self.async_login()
         try:
-            with async_timeout.timeout(10, loop=self._hass.loop):
+            with async_timeout.timeout(10, loop=self._loop):
                 response = yield from self._websession.get(
                     self.ALARMDOTCOM_URL + '{}/main.aspx'.format(
                         self._login_info['sessionkey']))
@@ -219,7 +219,7 @@ class Alarmdotcom(object):
         """
         _LOGGER.debug('Sending %s to Alarm.com', event)
 
-        with async_timeout.timeout(10, loop=self._hass.loop):
+        with async_timeout.timeout(10, loop=self._loop):
             try:
                 response = yield from self._websession.post(
                     self.ALARMDOTCOM_URL + '{}/main.aspx'.format(
