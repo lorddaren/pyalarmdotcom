@@ -99,89 +99,88 @@ class Alarmdotcom(object):
     @asyncio.coroutine
     def async_login(self):
        """Login to Alarm.com."""
-        _LOGGER.debug('Attempting to log into Alarm.com...')
+       _LOGGER.debug('Attempting to log into Alarm.com...')
 
-        # Get the session key for future logins.
-        response = None
-        try:
-            with async_timeout.timeout(10, loop=self._hass.loop):
-                response = yield from self._websession.get(
-                    ALARMDOTCOM_URL + '/Default.aspx')
+       # Get the session key for future logins.
+       response = None
+       try:
+           with async_timeout.timeout(10, loop=self._hass.loop):
+               response = yield from self._websession.get(
+                   ALARMDOTCOM_URL + '/Default.aspx')
 
-            _LOGGER.debug(
-                'Response status from Alarm.com: %s',
-                response.status)
-            text = yield from response.text()
-            _LOGGER.debug(text)
-            tree = BeautifulSoup(text, 'html.parser')
-            self._login_info = {
-                'sessionkey': SESSION_KEY_RE.match(
-                    response.url).groupdict()['sessionKey'],
-                VIEWSTATE: tree.select(
-                    '#{}'.format(VIEWSTATE))[0].attrs.get('value'),
-                VIEWSTATEGENERATOR: tree.select(
-                    '#{}'.format(VIEWSTATEGENERATOR))[0].attrs.get('value'),
-                EVENTVALIDATION: tree.select(
-                    '#{}'.format(EVENTVALIDATION))[0].attrs.get('value')
-            }
+           _LOGGER.debug(
+               'Response status from Alarm.com: %s',
+               response.status)
+           text = yield from response.text()
+           _LOGGER.debug(text)
+           tree = BeautifulSoup(text, 'html.parser')
+           self._login_info = {
+               'sessionkey': SESSION_KEY_RE.match(
+                   response.url).groupdict()['sessionKey'],
+               VIEWSTATE: tree.select(
+                   '#{}'.format(VIEWSTATE))[0].attrs.get('value'),
+               VIEWSTATEGENERATOR: tree.select(
+                   '#{}'.format(VIEWSTATEGENERATOR))[0].attrs.get('value'),
+               EVENTVALIDATION: tree.select(
+                   '#{}'.format(EVENTVALIDATION))[0].attrs.get('value')
+           }
 
-            _LOGGER.debug(self._login_info)
-            _LOGGER.info('Successful login to Alarm.com')
+           _LOGGER.debug(self._login_info)
+           _LOGGER.info('Successful login to Alarm.com')
 
-        except (asyncio.TimeoutError, aiohttp.errors.ClientError):
-            _LOGGER.error('Can not get login page from Alarm.com')
-            return False
-        except AttributeError:
-            _LOGGER.error('Unable to get sessionKey from Alarm.com')
-            raise
+       except (asyncio.TimeoutError, aiohttp.errors.ClientError):
+           _LOGGER.error('Can not get login page from Alarm.com')
+           return False
+       except AttributeError:
+           _LOGGER.error('Unable to get sessionKey from Alarm.com')
+           raise
 
         # Login params to pass during the post
-        params = {
-            USERNAME: self._username,
-            PASSWORD: self._password,
-            VIEWSTATE: self._login_info[VIEWSTATE],
-            VIEWSTATEGENERATOR: self._login_info[VIEWSTATEGENERATOR],
-            EVENTVALIDATION: self._login_info[EVENTVALIDATION]
-        }
+       params = {
+           USERNAME: self._username,
+           PASSWORD: self._password,
+           VIEWSTATE: self._login_info[VIEWSTATE],
+           VIEWSTATEGENERATOR: self._login_info[VIEWSTATEGENERATOR],
+           EVENTVALIDATION: self._login_info[EVENTVALIDATION]
+       }
 
-        try:
-            # Make an attempt to log in.
-            with async_timeout.timeout(10, loop=self._hass.loop):
-                response = yield from self._websession.post(
-                    ALARMDOTCOM_URL + '{}/Default.aspx'.format(
-                        self._login_info['sessionkey']),
-                    data=params)
-            _LOGGER.debug(
-                'Status from Alarm.com login %s', response.status)
+       try:
+           # Make an attempt to log in.
+           with async_timeout.timeout(10, loop=self._hass.loop):
+               response = yield from self._websession.post(
+                   ALARMDOTCOM_URL + '{}/Default.aspx'.format(
+                       self._login_info['sessionkey']),
+                   data=params)
+           _LOGGER.debug(
+               'Status from Alarm.com login %s', response.status)
 
-            # Get the text from the login to ensure that we are logged in.
-            text = yield from response.text()
-            _LOGGER.debug(text)
-            tree = BeautifulSoup(text, 'html.parser')
-            try:
-                # Get the initial state.
-                self._state = tree.select(ALARM_STATE)[0].get_text()
-                _LOGGER.debug(
-                    'Current alarm state: %s', self._state)
-            except IndexError:
-                try:
-                    error_control = tree.select(
-                        '#{}'.format(ERROR_CONTROL))[0].attrs.get('value')
-                    if 'Login failure: Bad Credentials' in error_control:
-                        _LOGGER.error(error_control)
-                        return False
-                except AttributeError:
-                    _LOGGER.error('Error while trying to log into Alarm.com')
-                    return False
-        except (asyncio.TimeoutError, aiohttp.errors.ClientError):
-            _LOGGER.error("Can not load login page from Alarm.com")
-            return False
+           # Get the text from the login to ensure that we are logged in.
+           text = yield from response.text()
+           _LOGGER.debug(text)
+           tree = BeautifulSoup(text, 'html.parser')
+           try:
+               # Get the initial state.
+               self._state = tree.select(ALARM_STATE)[0].get_text()
+               _LOGGER.debug(
+                   'Current alarm state: %s', self._state)
+           except IndexError:
+               try:
+                   error_control = tree.select(
+                       '#{}'.format(ERROR_CONTROL))[0].attrs.get('value')
+                   if 'Login failure: Bad Credentials' in error_control:
+                       _LOGGER.error(error_control)
+                       return False
+               except AttributeError:
+                   _LOGGER.error('Error while trying to log into Alarm.com')
+                   return False
+       except (asyncio.TimeoutError, aiohttp.errors.ClientError):
+           _LOGGER.error("Can not load login page from Alarm.com")
+           return False
 
     @asyncio.coroutine
     def async_update(self):
         """Fetch the latest state."""
         _LOGGER.debug('Calling update on Alarm.com')
-        from bs4 import BeautifulSoup
         response = None
         if not self._login_info:
             yield from self.async_login()
@@ -213,6 +212,10 @@ class Alarmdotcom(object):
 
     @asyncio.coroutine
     def _send(self, event):
+        """Generic function for sending commands to Alarm.com
+
+        :param event: Event command to send to alarm.com
+        """
         _LOGGER.debug('Sending %s to Alarm.com', event)
 
         with async_timeout.timeout(10, loop=self._hass.loop):
