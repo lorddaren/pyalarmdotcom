@@ -107,7 +107,7 @@ class Alarmdotcom(object):
        try:
            with async_timeout.timeout(10, loop=self._hass.loop):
                response = yield from self._websession.get(
-                   ALARMDOTCOM_URL + '/Default.aspx')
+                   self.ALARMDOTCOM_URL + '/Default.aspx')
 
            _LOGGER.debug(
                'Response status from Alarm.com: %s',
@@ -116,14 +116,14 @@ class Alarmdotcom(object):
            _LOGGER.debug(text)
            tree = BeautifulSoup(text, 'html.parser')
            self._login_info = {
-               'sessionkey': SESSION_KEY_RE.match(
+               'sessionkey': self.SESSION_KEY_RE.match(
                    response.url).groupdict()['sessionKey'],
-               VIEWSTATE: tree.select(
-                   '#{}'.format(VIEWSTATE))[0].attrs.get('value'),
-               VIEWSTATEGENERATOR: tree.select(
-                   '#{}'.format(VIEWSTATEGENERATOR))[0].attrs.get('value'),
-               EVENTVALIDATION: tree.select(
-                   '#{}'.format(EVENTVALIDATION))[0].attrs.get('value')
+               self.VIEWSTATE: tree.select(
+                   '#{}'.format(self.VIEWSTATE))[0].attrs.get('value'),
+               self.VIEWSTATEGENERATOR: tree.select(
+                   '#{}'.format(self.VIEWSTATEGENERATOR))[0].attrs.get('value'),
+               self.EVENTVALIDATION: tree.select(
+                   '#{}'.format(self.EVENTVALIDATION))[0].attrs.get('value')
            }
 
            _LOGGER.debug(self._login_info)
@@ -138,18 +138,18 @@ class Alarmdotcom(object):
 
         # Login params to pass during the post
        params = {
-           USERNAME: self._username,
-           PASSWORD: self._password,
-           VIEWSTATE: self._login_info[VIEWSTATE],
-           VIEWSTATEGENERATOR: self._login_info[VIEWSTATEGENERATOR],
-           EVENTVALIDATION: self._login_info[EVENTVALIDATION]
+           self.USERNAME: self._username,
+           self.PASSWORD: self._password,
+           self.VIEWSTATE: self._login_info[self.VIEWSTATE],
+           self.VIEWSTATEGENERATOR: self._login_info[self.VIEWSTATEGENERATOR],
+           self.EVENTVALIDATION: self._login_info[self.EVENTVALIDATION]
        }
 
        try:
            # Make an attempt to log in.
            with async_timeout.timeout(10, loop=self._hass.loop):
                response = yield from self._websession.post(
-                   ALARMDOTCOM_URL + '{}/Default.aspx'.format(
+                   self.ALARMDOTCOM_URL + '{}/Default.aspx'.format(
                        self._login_info['sessionkey']),
                    data=params)
            _LOGGER.debug(
@@ -161,13 +161,13 @@ class Alarmdotcom(object):
            tree = BeautifulSoup(text, 'html.parser')
            try:
                # Get the initial state.
-               self._state = tree.select(ALARM_STATE)[0].get_text()
+               self._state = tree.select(self.ALARM_STATE)[0].get_text()
                _LOGGER.debug(
                    'Current alarm state: %s', self._state)
            except IndexError:
                try:
                    error_control = tree.select(
-                       '#{}'.format(ERROR_CONTROL))[0].attrs.get('value')
+                       '#{}'.format(self.ERROR_CONTROL))[0].attrs.get('value')
                    if 'Login failure: Bad Credentials' in error_control:
                        _LOGGER.error(error_control)
                        return False
@@ -188,7 +188,7 @@ class Alarmdotcom(object):
         try:
             with async_timeout.timeout(10, loop=self._hass.loop):
                 response = yield from self._websession.get(
-                    ALARMDOTCOM_URL + '{}/main.aspx'.format(
+                    self.ALARMDOTCOM_URL + '{}/main.aspx'.format(
                         self._login_info['sessionkey']))
 
             _LOGGER.debug('Response from Alarm.com: %s', response.status)
@@ -196,7 +196,7 @@ class Alarmdotcom(object):
             _LOGGER.debug(text)
             tree = BeautifulSoup(text, 'html.parser')
             try:
-                self._state = tree.select(ALARM_STATE)[0].get_text()
+                self._state = tree.select(self.ALARM_STATE)[0].get_text()
                 _LOGGER.debug(
                     'Current alarm state: %s', self._state)
             except IndexError:
@@ -222,14 +222,14 @@ class Alarmdotcom(object):
         with async_timeout.timeout(10, loop=self._hass.loop):
             try:
                 response = yield from self._websession.post(
-                    ALARMDOTCOM_URL + '{}/main.aspx'.format(
+                    self.ALARMDOTCOM_URL + '{}/main.aspx'.format(
                         self._login_info['sessionkey']),
                     data={
-                        VIEWSTATE: '',
-                        VIEWSTATEENCRYPTED: '',
-                        EVENTVALIDATION:
-                            COMMAND_LIST[event]['eventvalidation'],
-                        COMMAND_LIST[event]['command']: event})
+                        self.VIEWSTATE: '',
+                        self.VIEWSTATEENCRYPTED: '',
+                        self.EVENTVALIDATION:
+                            self.COMMAND_LIST[event]['eventvalidation'],
+                        self.COMMAND_LIST[event]['command']: event})
 
                 _LOGGER.debug(
                     'Response from Alarm.com %s', response.status)
@@ -237,7 +237,7 @@ class Alarmdotcom(object):
                 tree = BeautifulSoup(text, 'html.parser')
                 try:
                     message = tree.select(
-                        '#{}'.format(MESSAGE_CONTROL))[0].get_text()
+                        '#{}'.format(self.MESSAGE_CONTROL))[0].get_text()
                     if 'command' in message:
                         _LOGGER.debug(message)
                         # Update alarm.com status after calling state change.
