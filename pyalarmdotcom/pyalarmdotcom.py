@@ -81,7 +81,7 @@ class Alarmdotcom(object):
                 'Arm+Away': {'command': ARM_AWAY_COMMAND,
                              'eventvalidation': ARM_AWAY_EVENT_VALIDATION}}
     
-    def __init__(self, username, password, websession, loop):
+    def __init__(self, username, password, websession):
         """
         Use aiohttp to make a request to alarm.com
 
@@ -93,19 +93,18 @@ class Alarmdotcom(object):
         self._username = username
         self._password = password
         self._websession = websession
-        self._loop = loop
         self._login_info = None
         self._state = None
 
     @asyncio.coroutine
-    def async_login(self):
+    def async_login(self, loop):
        """Login to Alarm.com."""
        _LOGGER.debug('Attempting to log into Alarm.com...')
 
        # Get the session key for future logins.
        response = None
        try:
-           with async_timeout.timeout(10, loop=self._loop):
+           with async_timeout.timeout(10, loop=loop):
                response = yield from self._websession.get(
                    self.ALARMDOTCOM_URL + '/Default.aspx')
 
@@ -147,7 +146,7 @@ class Alarmdotcom(object):
 
        try:
            # Make an attempt to log in.
-           with async_timeout.timeout(10, loop=self._loop):
+           with async_timeout.timeout(10, loop=loop):
                response = yield from self._websession.post(
                    self.ALARMDOTCOM_URL + '{}/Default.aspx'.format(
                        self._login_info['sessionkey']),
@@ -179,14 +178,14 @@ class Alarmdotcom(object):
            return False
 
     @asyncio.coroutine
-    def async_update(self):
+    def async_update(self, loop):
         """Fetch the latest state."""
         _LOGGER.debug('Calling update on Alarm.com')
         response = None
         if not self._login_info:
             yield from self.async_login()
         try:
-            with async_timeout.timeout(10, loop=self._loop):
+            with async_timeout.timeout(10, loop=loop):
                 response = yield from self._websession.get(
                     self.ALARMDOTCOM_URL + '{}/main.aspx'.format(
                         self._login_info['sessionkey']))
@@ -212,7 +211,7 @@ class Alarmdotcom(object):
                 yield from response.release()
 
     @asyncio.coroutine
-    def _send(self, event):
+    def _send(self, event, loop):
         """Generic function for sending commands to Alarm.com
 
         :param event: Event command to send to alarm.com
@@ -220,7 +219,7 @@ class Alarmdotcom(object):
         _LOGGER.debug('Sending %s to Alarm.com', event)
 
         try:
-            with async_timeout.timeout(10, loop=self._loop):
+            with async_timeout.timeout(10, loop=loop):
                 response = yield from self._websession.post(
                     self.ALARMDOTCOM_URL + '{}/main.aspx'.format(
                         self._login_info['sessionkey']),
@@ -259,16 +258,16 @@ class Alarmdotcom(object):
                 yield from response.release()
 
     @asyncio.coroutine
-    def async_alarm_disarm(self):
+    def async_alarm_disarm(self, loop):
         """Send disarm command."""
-        yield from self._send('Disarm')
+        yield from self._send('Disarm', loop)
 
     @asyncio.coroutine
-    def async_alarm_arm_home(self):
+    def async_alarm_arm_home(self, loop):
         """Send arm hom command."""
-        yield from self._send('Arm+Stay')
+        yield from self._send('Arm+Stay', loop)
 
     @asyncio.coroutine
-    def async_alarm_arm_away(self):
+    def async_alarm_arm_away(self, loop):
         """Send arm away command."""
-        yield from self._send('Arm+Away')
+        yield from self._send('Arm+Away', loop)
