@@ -1,7 +1,7 @@
 Alarm.com Python Library
 ===============================
 
-version number: 0.2.8
+version number: 0.2.9
 author: Daren Lord
 
 Overview
