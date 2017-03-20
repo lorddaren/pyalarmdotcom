@@ -219,8 +219,8 @@ class Alarmdotcom(object):
         """
         _LOGGER.debug('Sending %s to Alarm.com', event)
 
-        with async_timeout.timeout(10, loop=self._loop):
-            try:
+        try:
+            with async_timeout.timeout(10, loop=self._loop):
                 response = yield from self._websession.post(
                     self.ALARMDOTCOM_URL + '{}/main.aspx'.format(
                         self._login_info['sessionkey']),
@@ -252,8 +252,11 @@ class Alarmdotcom(object):
                     elif event == 'Arm+Away':
                         yield from self.async_alarm_arm_away()
 
-            except (asyncio.TimeoutError, aiohttp.errors.ClientError):
-                _LOGGER.error('Error while trying to disarm Alarm.com system')
+        except (asyncio.TimeoutError, aiohttp.errors.ClientError):
+            _LOGGER.error('Error while trying to disarm Alarm.com system')
+        finally:
+            if response is not None:
+                yield from response.release()
 
     @asyncio.coroutine
     def async_alarm_disarm(self):
