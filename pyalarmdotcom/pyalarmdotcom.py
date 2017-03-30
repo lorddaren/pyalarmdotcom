@@ -73,6 +73,7 @@ class Alarmdotcom(object):
     
     ARMING_PANEL = '#ctl00_phBody_pnlArming'
     ALARM_STATE = '#ctl00_phBody_lblArmingState'
+    SENSOR_STATUS = '#ctl00_phBody_lblSensorStatus'
 
     COMMAND_LIST = {'Disarm': {'command': DISARM_COMMAND,
                            'eventvalidation': DISARM_EVENT_VALIDATION},
@@ -96,6 +97,7 @@ class Alarmdotcom(object):
         self._loop = loop
         self._login_info = None
         self.state = None
+        self.sensor_status = None
 
     @asyncio.coroutine
     def async_login(self):
@@ -160,10 +162,12 @@ class Alarmdotcom(object):
            _LOGGER.debug(text)
            tree = BeautifulSoup(text, 'html.parser')
            try:
-               # Get the initial state.
                self.state = tree.select(self.ALARM_STATE)[0].get_text()
                _LOGGER.debug(
                    'Current alarm state: %s', self.state)
+               self.sensor_status = tree.select(self.SENSOR_STATUS)[0].get_text()
+               _LOGGER.debug(
+                   'Current sensor status: %s', self.sensor_status)
            except IndexError:
                try:
                    error_control = tree.select(
@@ -199,9 +203,13 @@ class Alarmdotcom(object):
                 self.state = tree.select(self.ALARM_STATE)[0].get_text()
                 _LOGGER.debug(
                     'Current alarm state: %s', self.state)
+                self.sensor_status = tree.select(self.SENSOR_STATUS)[0].get_text()
+                _LOGGER.debug(
+                    'Current sensor status: %s', self.sensor_status)
             except IndexError:
                 # We may have timed out. Re-login again
                 self.state = None
+                self.sensor_status = None
                 self._login_info = None
                 yield from self.async_update()
         except (asyncio.TimeoutError, aiohttp.errors.ClientError):
