@@ -119,7 +119,7 @@ class Alarmdotcom(object):
            tree = BeautifulSoup(text, 'html.parser')
            self._login_info = {
                'sessionkey': self.SESSION_KEY_RE.match(
-                   response.url).groupdict()['sessionKey'],
+                   str(response.url)).groupdict()['sessionKey'],
                self.VIEWSTATE: tree.select(
                    '#{}'.format(self.VIEWSTATE))[0].attrs.get('value'),
                self.VIEWSTATEGENERATOR: tree.select(
@@ -131,7 +131,7 @@ class Alarmdotcom(object):
            _LOGGER.debug(self._login_info)
            _LOGGER.info('Successful login to Alarm.com')
 
-       except (asyncio.TimeoutError, aiohttp.errors.ClientError):
+       except (asyncio.TimeoutError, aiohttp.ClientError):
            _LOGGER.error('Can not get login page from Alarm.com')
            return False
        except AttributeError:
@@ -178,7 +178,7 @@ class Alarmdotcom(object):
                except AttributeError:
                    _LOGGER.error('Error while trying to log into Alarm.com')
                    return False
-       except (asyncio.TimeoutError, aiohttp.errors.ClientError):
+       except (asyncio.TimeoutError, aiohttp.ClientError):
            _LOGGER.error("Can not load login page from Alarm.com")
            return False
 
@@ -212,7 +212,7 @@ class Alarmdotcom(object):
                 self.sensor_status = None
                 self._login_info = None
                 yield from self.async_update()
-        except (asyncio.TimeoutError, aiohttp.errors.ClientError):
+        except (asyncio.TimeoutError, aiohttp.ClientError):
             _LOGGER.error("Can not load login page from Alarm.com")
             return False
         finally:
@@ -260,7 +260,7 @@ class Alarmdotcom(object):
                     elif event == 'Arm+Away':
                         yield from self.async_alarm_arm_away()
 
-        except (asyncio.TimeoutError, aiohttp.errors.ClientError):
+        except (asyncio.TimeoutError, aiohttp.ClientError):
             _LOGGER.error('Error while trying to disarm Alarm.com system')
         finally:
             if response is not None:
