@@ -41,7 +41,7 @@ class Alarmdotcom(object):
     
     # Session key regex to extract the current session
     SESSION_KEY_RE = re.compile(
-        '{url}(?P<sessionKey>.*)/Default.aspx'.format(url=ALARMDOTCOM_URL))
+        '{url}(?P<sessionKey>.*)/default.aspx'.format(url=ALARMDOTCOM_URL))
     
     # ALARM.COM CSS MAPPINGS
     USERNAME = 'ctl00$ContentPlaceHolder1$txtLogin'
@@ -109,7 +109,12 @@ class Alarmdotcom(object):
        try:
            with async_timeout.timeout(10, loop=self._loop):
                response = yield from self._websession.get(
-                   self.ALARMDOTCOM_URL + '/Default.aspx')
+                   self.ALARMDOTCOM_URL + '/default.aspx',
+               headers={'User-Agent': 'Mozilla/5.0 '
+                                      '(Windows NT 6.1;'
+                                      ' WOW64; rv:40.0) '
+                                      'Gecko/20100101 '
+                                      'Firefox/40.1'})
 
            _LOGGER.debug(
                'Response status from Alarm.com: %s',
@@ -129,7 +134,7 @@ class Alarmdotcom(object):
            }
 
            _LOGGER.debug(self._login_info)
-           _LOGGER.info('Successful login to Alarm.com')
+           _LOGGER.info('Attempting login to Alarm.com')
 
        except (asyncio.TimeoutError, aiohttp.ClientError):
            _LOGGER.error('Can not get login page from Alarm.com')
@@ -151,11 +156,29 @@ class Alarmdotcom(object):
            # Make an attempt to log in.
            with async_timeout.timeout(10, loop=self._loop):
                response = yield from self._websession.post(
-                   self.ALARMDOTCOM_URL + '{}/Default.aspx'.format(
+                   self.ALARMDOTCOM_URL + '{}/default.aspx'.format(
                        self._login_info['sessionkey']),
-                   data=params)
+                   data=params,
+                   headers={'User-Agent': 'Mozilla/5.0 '
+                                          '(Windows NT 6.1; '
+                                          'WOW64; rv:40.0) '
+                                          'Gecko/20100101 '
+                                          'Firefox/40.1'}
+               )
            _LOGGER.debug(
                'Status from Alarm.com login %s', response.status)
+
+           # Alarm.com changed their redirect so hit this page directly to get the status of login.
+           with async_timeout.timeout(10, loop=self._loop):
+               response = yield from self._websession.get(
+                   self.ALARMDOTCOM_URL + '{}/main.aspx'.format(
+                       self._login_info['sessionkey']),
+                   headers={'User-Agent': 'Mozilla/5.0 '
+                                          '(Windows NT 6.1; '
+                                          'WOW64; rv:40.0) '
+                                          'Gecko/20100101 '
+                                          'Firefox/40.1'}
+               )
 
            # Get the text from the login to ensure that we are logged in.
            text = yield from response.text()
@@ -193,7 +216,13 @@ class Alarmdotcom(object):
             with async_timeout.timeout(10, loop=self._loop):
                 response = yield from self._websession.get(
                     self.ALARMDOTCOM_URL + '{}/main.aspx'.format(
-                        self._login_info['sessionkey']))
+                        self._login_info['sessionkey']),
+                    headers={'User-Agent': 'Mozilla/5.0 '
+                                           '(Windows NT 6.1; '
+                                           'WOW64; rv:40.0) '
+                                           'Gecko/20100101 '
+                                           'Firefox/40.1'}
+                )
 
             _LOGGER.debug('Response from Alarm.com: %s', response.status)
             text = yield from response.text()
@@ -237,7 +266,13 @@ class Alarmdotcom(object):
                         self.VIEWSTATEENCRYPTED: '',
                         self.EVENTVALIDATION:
                             self.COMMAND_LIST[event]['eventvalidation'],
-                        self.COMMAND_LIST[event]['command']: event})
+                        self.COMMAND_LIST[event]['command']: event},
+                    headers={'User-Agent': 'Mozilla/5.0 '
+                                           '(Windows NT 6.1; '
+                                           'WOW64; rv:40.0) '
+                                           'Gecko/20100101 '
+                                           'Firefox/40.1'}
+                )
 
                 _LOGGER.debug(
                     'Response from Alarm.com %s', response.status)

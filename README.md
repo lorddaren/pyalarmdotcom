@@ -1,7 +1,7 @@
 Alarm.com Python Library
 ===============================
 
-version number: 0.2.9
+version number: 0.3.1
 author: Daren Lord
 
 Overview
@@ -33,3 +33,8 @@ Example
 -------
 
 TBD
+
+Changelog
+---------
+### 0.3.1
+* Updated login response check to not look at the redirect page.
