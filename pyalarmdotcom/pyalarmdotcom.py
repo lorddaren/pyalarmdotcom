@@ -291,7 +291,7 @@ class Alarmdotcom(object):
                     if event == 'Disarm':
                         yield from self.async_alarm_disarm()
                     elif event == 'Arm+Stay':
-                        yield from self.async_alarm_arm_away()
+                        yield from self.async_alarm_arm_home()
                     elif event == 'Arm+Away':
                         yield from self.async_alarm_arm_away()
 
