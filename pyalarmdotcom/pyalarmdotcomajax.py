@@ -115,7 +115,7 @@ class Alarmdotcom(object):
         except (asyncio.TimeoutError, aiohttp.ClientError):
             _LOGGER.error("Can not login to Alarm.com")
             return False
-        except AttributeError:
+        except KeyError:
             _LOGGER.error("Unable to extract ajax key from Alarm.com")
             raise
         try:
@@ -128,7 +128,7 @@ class Alarmdotcom(object):
         except (asyncio.TimeoutError, aiohttp.ClientError):
             _LOGGER.error("Can not load system data from Alarm.com")
             return False
-        except (AttributeError, IndexError):
+        except (KeyError, IndexError):
             _LOGGER.error("Unable to extract system id from Alarm.com")
             raise
         try:
@@ -143,7 +143,7 @@ class Alarmdotcom(object):
         except (asyncio.TimeoutError, aiohttp.ClientError):
             _LOGGER.error("Can not load partition data from Alarm.com")
             return False
-        except (AttributeError, IndexError):
+        except (KeyError, IndexError):
             _LOGGER.error("Unable to extract partition id from Alarm.com")
             raise
         return True
@@ -172,7 +172,7 @@ class Alarmdotcom(object):
         except (asyncio.TimeoutError, aiohttp.ClientError):
             _LOGGER.error("Can not load state data from Alarm.com")
             return False
-        except AttributeError:
+        except KeyError:
             _LOGGER.error("Unable to extract state data from Alarm.com")
             raise
         try:
@@ -187,7 +187,7 @@ class Alarmdotcom(object):
         except (asyncio.TimeoutError, aiohttp.ClientError):
             _LOGGER.error("Can not load trouble conditions from Alarm.com")
             return False
-        except AttributeError:
+        except KeyError:
             _LOGGER.error("Unable to extract trouble conditions from Alarm.com")
             raise
         return True
