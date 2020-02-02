@@ -40,7 +40,13 @@ class Alarmdotcom(object):
     }
 
     def __init__(
-        self, username, password, websession, loop, forcebypass=False, noentrydelay=False
+        self,
+        username,
+        password,
+        websession,
+        loop,
+        forcebypass=False,
+        noentrydelay=False,
     ):
         """
         Use aiohttp to make a request to alarm.com
@@ -53,7 +59,9 @@ class Alarmdotcom(object):
         self._username = username
         self._password = password
         self._websession = websession
-        self.state = ""  # empty string instead of None so lower() in alarm_control_panel doesn't complain
+        self.state = (
+            ""
+        )  # empty string instead of None so lower() in alarm_control_panel doesn't complain
         self.sensor_status = None
         self._ajax_headers = {
             "Accept": "application/vnd.api+json",
@@ -115,7 +123,7 @@ class Alarmdotcom(object):
         except (asyncio.TimeoutError, aiohttp.ClientError):
             _LOGGER.error("Can not login to Alarm.com")
             return False
-        except AttributeError:
+        except KeyError:
             _LOGGER.error("Unable to extract ajax key from Alarm.com")
             raise
         try:
@@ -128,7 +136,7 @@ class Alarmdotcom(object):
         except (asyncio.TimeoutError, aiohttp.ClientError):
             _LOGGER.error("Can not load system data from Alarm.com")
             return False
-        except (AttributeError, IndexError):
+        except (KeyError, IndexError):
             _LOGGER.error("Unable to extract system id from Alarm.com")
             raise
         try:
@@ -143,7 +151,7 @@ class Alarmdotcom(object):
         except (asyncio.TimeoutError, aiohttp.ClientError):
             _LOGGER.error("Can not load partition data from Alarm.com")
             return False
-        except (AttributeError, IndexError):
+        except (KeyError, IndexError):
             _LOGGER.error("Unable to extract partition id from Alarm.com")
             raise
         return True
@@ -172,7 +180,7 @@ class Alarmdotcom(object):
         except (asyncio.TimeoutError, aiohttp.ClientError):
             _LOGGER.error("Can not load state data from Alarm.com")
             return False
-        except AttributeError:
+        except KeyError:
             _LOGGER.error("Unable to extract state data from Alarm.com")
             raise
         try:
@@ -187,7 +195,7 @@ class Alarmdotcom(object):
         except (asyncio.TimeoutError, aiohttp.ClientError):
             _LOGGER.error("Can not load trouble conditions from Alarm.com")
             return False
-        except AttributeError:
+        except KeyError:
             _LOGGER.error("Unable to extract trouble conditions from Alarm.com")
             raise
         return True
