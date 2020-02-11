@@ -59,9 +59,7 @@ class Alarmdotcom(object):
         self._username = username
         self._password = password
         self._websession = websession
-        self.state = (
-            ""
-        )  # empty string instead of None so lower() in alarm_control_panel doesn't complain
+        self.state = ""  # empty string instead of None so lower() in alarm_control_panel doesn't complain
         self.sensor_status = None
         self._ajax_headers = {
             "Accept": "application/vnd.api+json",
@@ -159,6 +157,8 @@ class Alarmdotcom(object):
     async def async_update(self):
         """Fetch the latest state."""
         _LOGGER.debug("Calling update on Alarm.com")
+        if not self._ajax_headers["ajaxrequestuniquekey"]:
+            await self.async_login()
         try:
             # grab partition status
             async with self._websession.get(
@@ -182,7 +182,11 @@ class Alarmdotcom(object):
             return False
         except KeyError:
             _LOGGER.error("Unable to extract state data from Alarm.com")
-            raise
+            # We may have timed out. Re-login again
+            self.state = None
+            self.sensor_status = None
+            self._ajax_headers["ajaxrequestuniquekey"] = None
+            await self.async_update()
         try:
             async with self._websession.get(
                 url=self.TROUBLECONDITIONS_URL, headers=self._ajax_headers
