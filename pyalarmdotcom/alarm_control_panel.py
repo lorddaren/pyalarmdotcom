@@ -2,7 +2,7 @@
 import logging
 import re
 
-from .pyalarmdotcomwebapi import Alarmdotcom
+from .pyalarmdotcom import Alarmdotcom
 import voluptuous as vol
 
 import homeassistant.components.alarm_control_panel as alarm

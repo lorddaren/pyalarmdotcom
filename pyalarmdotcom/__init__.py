@@ -1,1 +1,1 @@
-from .pyalarmdotcomwebapi import Alarmdotcom
+from .pyalarmdotcom import Alarmdotcom

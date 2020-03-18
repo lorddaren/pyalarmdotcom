@@ -3,8 +3,10 @@ import logging
 import aiohttp
 import asyncio
 import async_timeout
-from bs4 import BeautifulSoup
+import sys
+import json
 
+from .stateful_browser import StatefulBrowser
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -18,70 +20,6 @@ class Alarmdotcom(object):
     and disarming the system are possible.
     """
 
-    # Page elements on alarm.com that are needed
-    # Using a dict for the attributes to set whether it is a name or id for locating the field
-    LOGIN_URL = 'https://www.alarm.com/pda/Default.aspx'
-    LOGIN_USERNAME = ('name', 'ctl00$ContentPlaceHolder1$txtLogin')
-    LOGIN_PASSWORD = ('name', 'ctl00$ContentPlaceHolder1$txtPassword')
-    LOGIN_BUTTON = ('name', 'ctl00$ContentPlaceHolder1$btnLogin')
-
-    STATUS_IMG = ('id', 'ctl00_phBody_lblArmingState')
-    
-    BTN_DISARM = ('id', 'ctl00_phBody_butDisarm')
-    BTN_ARM_STAY = ('id', 'ctl00_phBody_butArmStay', 'ctl00_phBody_ArmingStateWidget_btnArmOptionStay')
-    BTN_ARM_AWAY = ('id', 'ctl00_phBody_butArmAway', 'ctl00_phBody_ArmingStateWidget_btnArmOptionAway')
-
-    # Image to check if hidden or not while the system performs it's action.
-    STATUS_UPDATING = {'id': 'ctl00_phBody_ArmingStateWidget_imgArmingUpdating'}
-
-    # Alarm.com constants
-
-    # Alarm.com baseURL
-    ALARMDOTCOM_URL = 'https://www.alarm.com/pda/'
-    
-    # Session key regex to extract the current session
-    SESSION_KEY_RE = re.compile(
-        '{url}(?P<sessionKey>.*)/default.aspx'.format(url=ALARMDOTCOM_URL))
-    
-    # ALARM.COM CSS MAPPINGS
-    USERNAME = 'ctl00$ContentPlaceHolder1$txtLogin'
-    PASSWORD = 'ctl00$ContentPlaceHolder1$txtPassword'
-    
-    LOGIN_CONST = 'ctl00$ContentPlaceHolder1$btnLogin'
-    
-    ERROR_CONTROL = 'ctl00_ContentPlaceHolder1_ErrorControl1'
-    MESSAGE_CONTROL = 'ctl00_ErrorControl1'
-    
-    VIEWSTATE = '__VIEWSTATE'
-    VIEWSTATEGENERATOR = '__VIEWSTATEGENERATOR'
-    VIEWSTATEENCRYPTED = '__VIEWSTATEENCRYPTED'
-    
-    # Event validation
-    EVENTVALIDATION = '__EVENTVALIDATION'
-    DISARM_EVENT_VALIDATION = \
-        'MnXvTutfO7KZZ1zZ7QR19E0sfvOVCpK7SV' \
-        'yeJ0IkUkbXpfEqLa4fa9PzFK2ydqxNal'
-    ARM_STAY_EVENT_VALIDATION = \
-        '/CwyHTpKH4aUp/pqo5gRwFJmKGubsvmx3RI6n' \
-        'IFcyrtacuqXSy5dMoqBPX3aV2ruxZBTUVxenQ' \
-        '7luwjnNdcsxQW/p+YvHjN9ialbwACZfQsFt2o5'
-    ARM_AWAY_EVENT_VALIDATION = '3ciB9sbTGyjfsnXn7J4LjfBvdGlkqiHoeh1vPjc5'
-    
-    DISARM_COMMAND = 'ctl00$phBody$butDisarm'
-    ARM_STAY_COMMAND = 'ctl00$phBody$butArmStay'
-    ARM_AWAY_COMMAND = 'ctl00$phBody$butArmAway'
-    
-    ARMING_PANEL = '#ctl00_phBody_pnlArming'
-    ALARM_STATE = '#ctl00_phBody_lblArmingState'
-    SENSOR_STATUS = '#ctl00_phBody_lblSensorStatus'
-
-    COMMAND_LIST = {'Disarm': {'command': DISARM_COMMAND,
-                           'eventvalidation': DISARM_EVENT_VALIDATION},
-                'Arm+Stay': {'command': ARM_STAY_COMMAND,
-                             'eventvalidation': ARM_STAY_EVENT_VALIDATION},
-                'Arm+Away': {'command': ARM_AWAY_COMMAND,
-                             'eventvalidation': ARM_AWAY_EVENT_VALIDATION}}
-    
     def __init__(self, username, password, websession, loop):
         """
         Use aiohttp to make a request to alarm.com
@@ -96,158 +34,166 @@ class Alarmdotcom(object):
         self._websession = websession
         self._loop = loop
         self._login_info = None
-        self.state = None
         self.sensor_status = None
+        self.state = ""  # empty string instead of None so lower() in alarm_control_panel doesn't complain
+        self.browser = None
+        self.panel_id = None
+        self.logged_in = False
 
+
+    def _get_browser(self):
+        if not self.browser:
+            br = StatefulBrowser(
+                soup_config={'features': 'lxml'},
+                raise_on_404=True,
+                user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.167 Safari/537.36'
+            )
+            # br.set_verbose(8)
+            self.browser = br
+        return self.browser
+
+
+    def _get_panel(self):
+        if not self.panel_id: 
+            result = self.api_call('systems/availableSystemItems')
+            user_id = result['data'][0]['id']
+            _LOGGER.debug('user id is '+user_id)
+            result = self.api_call('systems/systems/'+user_id)
+            panel_id = result['data']['relationships']['partitions']['data'][0]['id']
+            _LOGGER.debug('panel id is '+panel_id)
+            self.panel_id = panel_id
+        return self.panel_id
+
+
+    def api_call(self, apiUrl, apiMethod='GET', apiBody=''):
+        br = self._get_browser()
+        if not self.logged_in:
+            self._login()
+        _LOGGER.debug('Logged In: '+str(self.logged_in)) # True
+        cookiejar = br.get_cookiejar()
+        ajaxkey = None
+        for cookie in cookiejar:
+            # _LOGGER.debug(cookie.name+': '+cookie.value)
+            if 'afg' == cookie.name:
+                ajaxkey = cookie.value
+        _LOGGER.debug("ajaxkey is %s", ajaxkey)
+        result = None
+        try:
+            apiCall = br.request(method=apiMethod,
+                url='https://www.alarm.com/web/api/'+apiUrl,
+                data=apiBody,
+                headers={'ajaxrequestuniquekey': ajaxkey, 'Accept': 'application/vnd.api+json', 'Content-Type': 'application/json; charset=UTF-8'}
+            )
+            responsecontent = apiCall.content.decode("utf-8")
+            _LOGGER.debug("Post command JSON is %s", responsecontent)
+            result = json.loads(responsecontent)
+            _LOGGER.debug(result)
+        except:
+            _LOGGER.debug('apiUrl: '+apiUrl)
+            _LOGGER.debug('apiBody: '+apiBody)
+            e = sys.exc_info()[0]
+            _LOGGER.debug("got an error %s", e)
+        return result
+        
+        
     @asyncio.coroutine
     def async_login(self):
-       """Login to Alarm.com."""
-       _LOGGER.debug('Attempting to log into Alarm.com...')
+        """Login to Alarm.com."""
+        _LOGGER.debug('Attempting to log into Alarm.com...')
 
-       # Get the session key for future logins.
-       response = None
-       try:
-           with async_timeout.timeout(10, loop=self._loop):
-               response = yield from self._websession.get(
-                   self.ALARMDOTCOM_URL + '/default.aspx',
-               headers={'User-Agent': 'Mozilla/5.0 '
-                                      '(Windows NT 6.1;'
-                                      ' WOW64; rv:40.0) '
-                                      'Gecko/20100101 '
-                                      'Firefox/40.1'})
+        # Get the session key for future logins.
+        response = None
+        br = self._get_browser()
+        with async_timeout.timeout(10, loop=self._loop):
+            response = br.open( "https://www.alarm.com/login.aspx" )
+           
+        _LOGGER.debug(
+            'Response status from Alarm.com: %s',
+            response)
+       
+        location = br.get_url()
+        content = br.get_current_page().decode("utf-8")
+        session = re.search(r'\/(\(S[^\/]+)\/', location)
+        if session:
+            session = session.group(1)
+        viewstate = re.search(r'name="__VIEWSTATE".*?value="([^"]*)"', content)
+        if viewstate:
+            viewstate = viewstate.group(1)
+        _LOGGER.debug("VIEWSTATE is %s", viewstate)
+        viewstategenerator = re.search(r'name="__VIEWSTATEGENERATOR".*?value="([^"]*)"', content)
+        if viewstategenerator:
+            viewstategenerator = viewstategenerator.group(1)
+        _LOGGER.debug("VIEWSTATEGENERATOR is %s", viewstategenerator)
+        eventval = re.search(r'name="__EVENTVALIDATION".*?value="([^"]*)"', content)
+        if eventval:
+            eventval = eventval.group(1)
+        _LOGGER.debug("EVENTVALIDATION is %s", eventval)
+        self.logged_in = None
+        _LOGGER.info('Attempting login to Alarm.com')
+        try:
+            postresponse = br.post('https://www.alarm.com/web/Default.aspx',
+                data={'__VIEWSTATE': viewstate, '__EVENTVALIDATION': eventval, '__VIEWSTATEGENERATOR': viewstategenerator, 'IsFromNewSite': '1', 'JavaScriptTest': '1', 'ctl00$ContentPlaceHolder1$loginform$hidLoginID': '', 'ctl00$ContentPlaceHolder1$loginform$txtUserName': self._username, 'ctl00$ContentPlaceHolder1$loginform$txtPassword': self._password, 'ctl00$ContentPlaceHolder1$loginform$signInButton': 'Logging In...', 'ctl00$bottom_footer3$ucCLS_ZIP$txtZip': 'Zip Code'})
+            _LOGGER.debug("Post login URL is %s", postresponse.url)
+            self.logged_in = True
+            panel_id = self._get_panel()
+        except:
+            e = sys.exc_info()[0]
+            _LOGGER.debug("got an error %s", e)
+        return self.logged_in
 
-           _LOGGER.debug(
-               'Response status from Alarm.com: %s',
-               response.status)
-           text = yield from response.text()
-           _LOGGER.debug(text)
-           tree = BeautifulSoup(text, 'html.parser')
-           self._login_info = {
-               'sessionkey': self.SESSION_KEY_RE.match(
-                   str(response.url)).groupdict()['sessionKey'],
-               self.VIEWSTATE: tree.select(
-                   '#{}'.format(self.VIEWSTATE))[0].attrs.get('value'),
-               self.VIEWSTATEGENERATOR: tree.select(
-                   '#{}'.format(self.VIEWSTATEGENERATOR))[0].attrs.get('value'),
-               self.EVENTVALIDATION: tree.select(
-                   '#{}'.format(self.EVENTVALIDATION))[0].attrs.get('value')
-           }
 
-           _LOGGER.debug(self._login_info)
-           _LOGGER.info('Attempting login to Alarm.com')
+    def command(self, command, forceBypass=False, noEntryDelay=False, silentArming=True):
+        states = ['', 'disarmed', 'armed stay', 'armed away']
+        commands = {'ARM+STAY': '/armStay', 'ARM+AWAY': '/armAway', 'DISARM': '/disarm', 'STATUS': ''}
+        panel_id = self._get_panel()
+        command = command.upper()
 
-       except (asyncio.TimeoutError, aiohttp.ClientError):
-           _LOGGER.error('Can not get login page from Alarm.com')
-           return False
-       except AttributeError:
-           _LOGGER.error('Unable to get sessionKey from Alarm.com')
-           raise
+        apiUrl = 'devices/partitions/'+panel_id+commands[command]
+        if('STATUS' == command):
+            apiMethod = 'GET'
+            apiBody = ''
+        else:
+            apiMethod = 'POST'
+            apiBody = '{"forceBypass":'+str(forceBypass).lower()+',"noEntryDelay":'+str(noEntryDelay).lower()+',"silentArming":'+str(silentArming).lower()+',"statePollOnly":false}'
 
-        # Login params to pass during the post
-       params = {
-           self.USERNAME: self._username,
-           self.PASSWORD: self._password,
-           self.VIEWSTATE: self._login_info[self.VIEWSTATE],
-           self.VIEWSTATEGENERATOR: self._login_info[self.VIEWSTATEGENERATOR],
-           self.EVENTVALIDATION: self._login_info[self.EVENTVALIDATION]
-       }
+        result = self.api_call(apiUrl, apiMethod, apiBody)
+        currentstate = result['data']['attributes']['state']
+        self.state = states[currentstate]
+        panel_id = result['data']['relationships']['stateInfo']['data']['id']
+        _LOGGER.debug ("Current state is "+states[currentstate])
+        _LOGGER.debug ("panel_id is "+panel_id)
 
-       try:
-           # Make an attempt to log in.
-           with async_timeout.timeout(10, loop=self._loop):
-               response = yield from self._websession.post(
-                   self.ALARMDOTCOM_URL + '{}/default.aspx'.format(
-                       self._login_info['sessionkey']),
-                   data=params,
-                   headers={'User-Agent': 'Mozilla/5.0 '
-                                          '(Windows NT 6.1; '
-                                          'WOW64; rv:40.0) '
-                                          'Gecko/20100101 '
-                                          'Firefox/40.1'}
-               )
-           _LOGGER.debug(
-               'Status from Alarm.com login %s', response.status)
-
-           # Alarm.com changed their redirect so hit this page directly to get the status of login.
-           with async_timeout.timeout(10, loop=self._loop):
-               response = yield from self._websession.get(
-                   self.ALARMDOTCOM_URL + '{}/main.aspx'.format(
-                       self._login_info['sessionkey']),
-                   headers={'User-Agent': 'Mozilla/5.0 '
-                                          '(Windows NT 6.1; '
-                                          'WOW64; rv:40.0) '
-                                          'Gecko/20100101 '
-                                          'Firefox/40.1'}
-               )
-
-           # Get the text from the login to ensure that we are logged in.
-           text = yield from response.text()
-           _LOGGER.debug(text)
-           tree = BeautifulSoup(text, 'html.parser')
-           try:
-               self.state = tree.select(self.ALARM_STATE)[0].get_text()
-               _LOGGER.debug(
-                   'Current alarm state: %s', self.state)
-               self.sensor_status = tree.select(self.SENSOR_STATUS)[0].get_text()
-               _LOGGER.debug(
-                   'Current sensor status: %s', self.sensor_status)
-           except IndexError:
-               try:
-                   error_control = tree.select(
-                       '#{}'.format(self.ERROR_CONTROL))[0].attrs.get('value')
-                   if 'Login failure: Bad Credentials' in error_control:
-                       _LOGGER.error(error_control)
-                       return False
-               except AttributeError:
-                   _LOGGER.error('Error while trying to log into Alarm.com')
-                   return False
-       except (asyncio.TimeoutError, aiohttp.ClientError):
-           _LOGGER.error("Can not load login page from Alarm.com")
-           return False
-
+        if('STATUS' == command):
+            apiMethod = 'GET'
+            apiBody = ''
+            apiUrl = 'devices/sensors'
+            result = self.api_call(apiUrl, apiMethod, apiBody)
+            self.sensor_status = ''
+            for sensor in result['data']:   
+                if self.sensor_status:
+                    self.sensor_status = self.sensor_status + ", "
+                self.sensor_status = self.sensor_status + sensor['attributes']['description'] + " is " + sensor['attributes']['stateText']
+        return self.state
+        
     @asyncio.coroutine
     def async_update(self):
         """Fetch the latest state."""
         _LOGGER.debug('Calling update on Alarm.com')
         response = None
-        if not self._login_info:
+        if not self.logged_in:
             yield from self.async_login()
         try:
             with async_timeout.timeout(10, loop=self._loop):
-                response = yield from self._websession.get(
-                    self.ALARMDOTCOM_URL + '{}/main.aspx'.format(
-                        self._login_info['sessionkey']),
-                    headers={'User-Agent': 'Mozilla/5.0 '
-                                           '(Windows NT 6.1; '
-                                           'WOW64; rv:40.0) '
-                                           'Gecko/20100101 '
-                                           'Firefox/40.1'}
-                )
+                response = self.command('STATUS')
 
-            _LOGGER.debug('Response from Alarm.com: %s', response.status)
-            text = yield from response.text()
-            _LOGGER.debug(text)
-            tree = BeautifulSoup(text, 'html.parser')
-            try:
-                self.state = tree.select(self.ALARM_STATE)[0].get_text()
-                _LOGGER.debug(
-                    'Current alarm state: %s', self.state)
-                self.sensor_status = tree.select(self.SENSOR_STATUS)[0].get_text()
-                _LOGGER.debug(
-                    'Current sensor status: %s', self.sensor_status)
-            except IndexError:
-                # We may have timed out. Re-login again
-                self.state = None
-                self.sensor_status = None
-                self._login_info = None
-                yield from self.async_update()
+            _LOGGER.debug('Response from Alarm.com: %s', response)
+            
         except (asyncio.TimeoutError, aiohttp.ClientError):
             _LOGGER.error("Can not load login page from Alarm.com")
             return False
-        finally:
-            if response is not None:
-                yield from response.release()
-
+        return response
+    
+    
     @asyncio.coroutine
     def _send(self, event):
         """Generic function for sending commands to Alarm.com
@@ -256,50 +202,18 @@ class Alarmdotcom(object):
         """
         _LOGGER.debug('Sending %s to Alarm.com', event)
 
+        if not self.logged_in:
+            yield from self.async_login()
         try:
             with async_timeout.timeout(10, loop=self._loop):
-                response = yield from self._websession.post(
-                    self.ALARMDOTCOM_URL + '{}/main.aspx'.format(
-                        self._login_info['sessionkey']),
-                    data={
-                        self.VIEWSTATE: '',
-                        self.VIEWSTATEENCRYPTED: '',
-                        self.EVENTVALIDATION:
-                            self.COMMAND_LIST[event]['eventvalidation'],
-                        self.COMMAND_LIST[event]['command']: event},
-                    headers={'User-Agent': 'Mozilla/5.0 '
-                                           '(Windows NT 6.1; '
-                                           'WOW64; rv:40.0) '
-                                           'Gecko/20100101 '
-                                           'Firefox/40.1'}
-                )
+                response = self.command(event)
 
-                _LOGGER.debug(
-                    'Response from Alarm.com %s', response.status)
-                text = yield from response.text()
-                tree = BeautifulSoup(text, 'html.parser')
-                try:
-                    message = tree.select(
-                        '#{}'.format(self.MESSAGE_CONTROL))[0].get_text()
-                    if 'command' in message:
-                        _LOGGER.debug(message)
-                        # Update alarm.com status after calling state change.
-                        yield from self.async_update()
-                except IndexError:
-                    # May have been logged out
-                    yield from self.async_login()
-                    if event == 'Disarm':
-                        yield from self.async_alarm_disarm()
-                    elif event == 'Arm+Stay':
-                        yield from self.async_alarm_arm_away()
-                    elif event == 'Arm+Away':
-                        yield from self.async_alarm_arm_away()
-
+            _LOGGER.debug('Response from Alarm.com: %s', response)
+            
         except (asyncio.TimeoutError, aiohttp.ClientError):
-            _LOGGER.error('Error while trying to disarm Alarm.com system')
-        finally:
-            if response is not None:
-                yield from response.release()
+            _LOGGER.error("Can not load login page from Alarm.com")
+            return False
+        return response
 
     @asyncio.coroutine
     def async_alarm_disarm(self):
@@ -315,3 +229,4 @@ class Alarmdotcom(object):
     def async_alarm_arm_away(self):
         """Send arm away command."""
         yield from self._send('Arm+Away')
+
